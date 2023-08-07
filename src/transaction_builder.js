@@ -1,16 +1,19 @@
 import { UnsignedHyper } from 'js-xdr';
 import BigNumber from 'bignumber.js';
-import clone from 'lodash/clone';
-import isUndefined from 'lodash/isUndefined';
-import isString from 'lodash/isString';
-import isArray from 'lodash/isArray';
 
 import xdr from './xdr';
+
+import { Account } from './account';
+import { MuxedAccount } from './muxed_account';
+import { decodeAddressToMuxedAccount } from './util/decode_encode_muxed_account';
+
 import { Transaction } from './transaction';
 import { FeeBumpTransaction } from './fee_bump_transaction';
+import { SorobanDataBuilder } from './sorobandata_builder';
+
+import { StrKey } from './strkey';
 import { SignerKey } from './signerkey';
 import { Memo } from './memo';
-import { decodeAddressToMuxedAccount } from './util/decode_encode_muxed_account';
 
 /**
  * Minimum base fee for transactions. If this fee is below the network
@@ -110,6 +113,16 @@ export const TimeoutInfinite = 0;
  * @param {string}              [opts.networkPassphrase] passphrase of the
  *     target Stellar network (e.g. "Public Global Stellar Network ; September
  *     2015" for the pubnet)
+ * @param {xdr.SorobanTransactionData | string}  [opts.sorobanData] - an
+ *     optional instance of {@link xdr.SorobanTransactionData} to be set as the
+ *     internal `Transaction.Ext.SorobanData` field (either the xdr object or a
+ *     base64 string). In the case of Soroban transactions, this can be obtained
+ *     from a prior simulation of the transaction with a contract invocation and
+ *     provides necessary resource estimations. You can also use
+ *     {@link SorobanDataBuilder} to construct complicated combinations of
+ *     parameters without mucking with XDR directly. **Note:** For
+ *     non-contract(non-Soroban) transactions, this has no effect.
+ *
  */
 export class TransactionBuilder {
   constructor(sourceAccount, opts = {}) {
@@ -117,7 +130,7 @@ export class TransactionBuilder {
       throw new Error('must specify source account for the transaction');
     }
 
-    if (isUndefined(opts.fee)) {
+    if (opts.fee === undefined) {
       throw new Error('must specify fee for the transaction (in stroops)');
     }
 
@@ -125,14 +138,77 @@ export class TransactionBuilder {
     this.operations = [];
 
     this.baseFee = opts.fee;
-    this.timebounds = clone(opts.timebounds) || null;
-    this.ledgerbounds = clone(opts.ledgerbounds) || null;
+    this.timebounds = opts.timebounds ? { ...opts.timebounds } : null;
+    this.ledgerbounds = opts.ledgerbounds ? { ...opts.ledgerbounds } : null;
     this.minAccountSequence = opts.minAccountSequence || null;
     this.minAccountSequenceAge = opts.minAccountSequenceAge || null;
     this.minAccountSequenceLedgerGap = opts.minAccountSequenceLedgerGap || null;
-    this.extraSigners = clone(opts.extraSigners) || null;
+    this.extraSigners = opts.extraSigners ? [...opts.extraSigners] : null;
     this.memo = opts.memo || Memo.none();
     this.networkPassphrase = opts.networkPassphrase || null;
+
+    this.sorobanData = opts.sorobanData
+      ? new SorobanDataBuilder(opts.sorobanData).build()
+      : null;
+  }
+
+  /**
+   * Creates a builder instance using an existing {@link Transaction} as a
+   * template, ignoring any existing envelope signatures.
+   *
+   * Note that the sequence number WILL be cloned, so EITHER this transaction or
+   * the one it was cloned from will be valid. This is useful in situations
+   * where you are constructing a transaction in pieces and need to make
+   * adjustments as you go (for example, when filling out Soroban resource
+   * information).
+   *
+   * @param {Transaction} tx  a "template" transaction to clone exactly
+   * @param {object} [opts]   additional options to override the clone, e.g.
+   *    {fee: '1000'} will override the existing base fee derived from `tx` (see
+   *    the {@link TransactionBuilder} constructor for detailed options)
+   *
+   * @returns {TransactionBuilder} a "prepared" builder instance with the same
+   *    configuration and operations as the given transaction
+   *
+   * @todo This cannot clone {@link FeeBumpTransaction}s, yet.
+   */
+  static cloneFrom(tx, opts = {}) {
+    if (!(tx instanceof Transaction)) {
+      throw new TypeError(`expected a 'Transaction', got: ${tx}`);
+    }
+
+    const sequenceNum = `${parseInt(tx.sequence, 10) - 1}`;
+
+    let source;
+    // rebuild the source account based on the strkey
+    if (StrKey.isValidMed25519PublicKey(tx.source)) {
+      source = MuxedAccount.fromAddress(tx.source, sequenceNum);
+    } else if (StrKey.isValidEd25519PublicKey(tx.source)) {
+      source = new Account(tx.source, sequenceNum);
+    } else {
+      throw new TypeError(`unsupported tx source account: ${tx.source}`);
+    }
+
+    // the initial fee passed to the builder gets scaled up based on the number
+    // of operations at the end, so we have to down-scale first
+    const unscaledFee = parseInt(tx.fee, 10) / tx.operations.length;
+
+    const builder = new TransactionBuilder(source, {
+      fee: (unscaledFee || BASE_FEE).toString(),
+      memo: tx.memo,
+      networkPassphrase: tx.networkPassphrase,
+      timebounds: tx.timeBounds,
+      ledgerbounds: tx.ledgerBounds,
+      minAccountSequence: tx.minAccountSequence,
+      minAccountSequenceAge: tx.minAccountSequenceAge,
+      minAccountSequenceLedgerGap: tx.minAccountSequenceLedgerGap,
+      extraSigners: tx.extraSigners,
+      ...opts
+    });
+
+    tx._tx.operations().forEach((op) => builder.addOperation(op));
+
+    return builder;
   }
 
   /**
@@ -406,7 +482,7 @@ export class TransactionBuilder {
    * @returns {TransactionBuilder}
    */
   setExtraSigners(extraSigners) {
-    if (!isArray(extraSigners)) {
+    if (!Array.isArray(extraSigners)) {
       throw new Error('extra_signers must be an array of strings.');
     }
 
@@ -420,7 +496,7 @@ export class TransactionBuilder {
       throw new Error('extra_signers cannot be longer than 2 elements.');
     }
 
-    this.extraSigners = clone(extraSigners);
+    this.extraSigners = [...extraSigners];
 
     return this;
   }
@@ -435,6 +511,26 @@ export class TransactionBuilder {
    */
   setNetworkPassphrase(networkPassphrase) {
     this.networkPassphrase = networkPassphrase;
+    return this;
+  }
+
+  /**
+   * Set the {SorobanTransactionData}. For non-contract(non-Soroban)
+   * transactions, this setting has no effect. In the case of Soroban
+   * transactions, set to an instance of SorobanTransactionData. This can
+   * typically be obtained from the simulation response based on a transaction
+   * with a InvokeHostFunctionOp. It provides necessary resource estimations for
+   * contract invocation.
+   *
+   * @param {xdr.SorobanTransactionData | string} sorobanData    the
+   *    {@link xdr.SorobanTransactionData} as a raw xdr object or a base64
+   *    string to be decoded then set as Transaction.Ext.SorobanData
+   *
+   * @returns {TransactionBuilder}
+   * @see {SorobanDataBuilder}
+   */
+  setSorobanData(sorobanData) {
+    this.sorobanData = new SorobanDataBuilder(sorobanData).build();
     return this;
   }
 
@@ -517,7 +613,17 @@ export class TransactionBuilder {
     }
 
     attrs.sourceAccount = decodeAddressToMuxedAccount(this.source.accountId());
-    attrs.ext = new xdr.TransactionExt(0);
+
+    // TODO - remove this workaround for TransactionExt ts constructor
+    //       and use the typescript generated static factory method once fixed
+    //       https://github.com/stellar/dts-xdr/issues/5
+    if (this.sorobanData) {
+      // @ts-ignore
+      attrs.ext = new xdr.TransactionExt(1, this.sorobanData);
+    } else {
+      // @ts-ignore
+      attrs.ext = new xdr.TransactionExt(0, xdr.Void);
+    }
 
     const xtx = new xdr.Transaction(attrs);
     xtx.operations(this.operations);
@@ -615,7 +721,7 @@ export class TransactionBuilder {
     }
 
     let feeSourceAccount;
-    if (isString(feeSource)) {
+    if (typeof feeSource === 'string') {
       feeSourceAccount = decodeAddressToMuxedAccount(feeSource);
     } else {
       feeSourceAccount = feeSource.xdrMuxedAccount();

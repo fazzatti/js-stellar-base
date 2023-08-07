@@ -1,5 +1,4 @@
 import BigNumber from 'bignumber.js';
-import isString from 'lodash/isString';
 
 import {
   encodeMuxedAccountToAddress,
@@ -675,7 +674,7 @@ describe('Operation', function () {
       var opts = {};
 
       var hash = StellarBase.hash('Tx hash').toString('hex');
-      expect(isString(hash)).to.be.true;
+      expect(typeof hash === 'string').to.be.true;
 
       opts.signer = {
         preAuthTx: hash,
@@ -718,7 +717,7 @@ describe('Operation', function () {
       var opts = {};
 
       var hash = StellarBase.hash('Hash Preimage').toString('hex');
-      expect(isString(hash)).to.be.true;
+      expect(typeof hash === 'string').to.be.true;
 
       opts.signer = {
         sha256Hash: hash,
@@ -2016,6 +2015,66 @@ describe('Operation', function () {
           account: 'GBAD'
         })
       ).to.throw(/account is invalid/);
+    });
+  });
+
+  describe('invokeHostFunction()', function () {
+    it('creates operation', function () {
+      const op = StellarBase.Operation.invokeHostFunction({
+        func: StellarBase.xdr.HostFunction.hostFunctionTypeInvokeContract([]),
+        auth: []
+      });
+      var xdr = op.toXDR('hex');
+      var operation = StellarBase.xdr.Operation.fromXDR(xdr, 'hex');
+
+      expect(operation.body().switch().name).to.equal('invokeHostFunction');
+      var obj = StellarBase.Operation.fromXDRObject(operation);
+      expect(obj.type).to.be.equal('invokeHostFunction');
+      expect(obj.func.switch().name).to.equal('hostFunctionTypeInvokeContract');
+      expect(obj.auth).to.deep.equal([]);
+    });
+
+    it('throws when no func passed', function () {
+      expect(() =>
+        StellarBase.Operation.invokeHostFunction({
+          auth: []
+        })
+      ).to.throw(/\('func'\) required/);
+    });
+  });
+
+  describe('bumpFootprintExpiration()', function () {
+    it('creates operation', function () {
+      const op = StellarBase.Operation.bumpFootprintExpiration({
+        ledgersToExpire: 1234
+      });
+      const xdr = op.toXDR('hex');
+      const operation = StellarBase.xdr.Operation.fromXDR(xdr, 'hex');
+
+      expect(operation.body().switch().name).to.equal(
+        'bumpFootprintExpiration'
+      );
+      const obj = StellarBase.Operation.fromXDRObject(operation);
+      expect(obj.type).to.be.equal('bumpFootprintExpiration');
+      expect(obj.ledgersToExpire).to.equal(1234);
+
+      expect(() => {
+        StellarBase.Operation.bumpFootprintExpiration({
+          ledgersToExpire: 0
+        });
+      }).to.throw(/ledger quantity/i);
+    });
+  });
+
+  describe('restoreFootprint()', function () {
+    it('creates operation', function () {
+      const op = StellarBase.Operation.restoreFootprint();
+      const xdr = op.toXDR('hex');
+      const operation = StellarBase.xdr.Operation.fromXDR(xdr, 'hex');
+
+      expect(operation.body().switch().name).to.equal('restoreFootprint');
+      const obj = StellarBase.Operation.fromXDRObject(operation);
+      expect(obj.type).to.be.equal('restoreFootprint');
     });
   });
 

@@ -74,7 +74,7 @@ enum SCValType
     SCV_LEDGER_KEY_NONCE = 21
 };
 
-enum SCStatusType
+enum SCErrorType
 {
     SST_OK = 0,
     SST_UNKNOWN_ERROR = 1,
@@ -89,50 +89,38 @@ enum SCStatusType
     // TODO: add more
 };
 
-enum SCHostValErrorCode
+enum SCErrorCode
 {
-    HOST_VALUE_UNKNOWN_ERROR = 0,
-    HOST_VALUE_RESERVED_TAG_VALUE = 1,
-    HOST_VALUE_UNEXPECTED_VAL_TYPE = 2,
-    HOST_VALUE_U63_OUT_OF_RANGE = 3,
-    HOST_VALUE_U32_OUT_OF_RANGE = 4,
-    HOST_VALUE_STATIC_UNKNOWN = 5,
-    HOST_VALUE_MISSING_OBJECT = 6,
-    HOST_VALUE_SYMBOL_TOO_LONG = 7,
-    HOST_VALUE_SYMBOL_BAD_CHAR = 8,
-    HOST_VALUE_SYMBOL_CONTAINS_NON_UTF8 = 9,
-    HOST_VALUE_BITSET_TOO_MANY_BITS = 10,
-    HOST_VALUE_STATUS_UNKNOWN = 11
+    SCEC_ARITH_DOMAIN = 0,      // some arithmetic wasn't defined (overflow, divide-by-zero)
+    SCEC_INDEX_BOUNDS = 1,      // something was indexed beyond its bounds
+    SCEC_INVALID_INPUT = 2,     // user provided some otherwise-bad data
+    SCEC_MISSING_VALUE = 3,     // some value was required but not provided
+    SCEC_EXISTING_VALUE = 4,    // some value was provided where not allowed
+    SCEC_EXCEEDED_LIMIT = 5,    // some arbitrary limit -- gas or otherwise -- was hit
+    SCEC_INVALID_ACTION = 6,    // data was valid but action requested was not
+    SCEC_INTERNAL_ERROR = 7,    // the internal state of the host was otherwise-bad
+    SCEC_UNEXPECTED_TYPE = 8,   // some type wasn't as expected
+    SCEC_UNEXPECTED_SIZE = 9    // something's size wasn't as expected
 };
 
-enum SCHostObjErrorCode
+struct SCError
 {
-    HOST_OBJECT_UNKNOWN_ERROR = 0,
-    HOST_OBJECT_UNKNOWN_REFERENCE = 1,
-    HOST_OBJECT_UNEXPECTED_TYPE = 2,
-    HOST_OBJECT_OBJECT_COUNT_EXCEEDS_U32_MAX = 3,
-    HOST_OBJECT_OBJECT_NOT_EXIST = 4,
-    HOST_OBJECT_VEC_INDEX_OUT_OF_BOUND = 5,
-    HOST_OBJECT_CONTRACT_HASH_WRONG_LENGTH = 6
+    SCErrorType type;
+    SCErrorCode code;
 };
 
-enum SCHostFnErrorCode
-{
-    HOST_FN_UNKNOWN_ERROR = 0,
-    HOST_FN_UNEXPECTED_HOST_FUNCTION_ACTION = 1,
-    HOST_FN_INPUT_ARGS_WRONG_LENGTH = 2,
-    HOST_FN_INPUT_ARGS_WRONG_TYPE = 3,
-    HOST_FN_INPUT_ARGS_INVALID = 4
+struct UInt128Parts {
+    uint64 hi;
+    uint64 lo;
 };
 
-enum SCHostStorageErrorCode
-{
-    HOST_STORAGE_UNKNOWN_ERROR = 0,
-    HOST_STORAGE_EXPECT_CONTRACT_DATA = 1,
-    HOST_STORAGE_READWRITE_ACCESS_TO_READONLY_ENTRY = 2,
-    HOST_STORAGE_ACCESS_TO_UNKNOWN_ENTRY = 3,
-    HOST_STORAGE_MISSING_KEY_IN_GET = 4,
-    HOST_STORAGE_GET_ON_DELETED_KEY = 5
+// A signed int128 has a high sign bit and 127 value bits. We break it into a
+// signed high int64 (that carries the sign bit and the high 63 value bits) and
+// a low unsigned uint64 that carries the low 64 bits. This will sort in
+// generated code in the same order the underlying int128 sorts.
+struct Int128Parts {
+    int64 hi;
+    uint64 lo;
 };
 
 enum SCHostAuthErrorCode
@@ -149,37 +137,28 @@ enum SCHostContextErrorCode
     HOST_CONTEXT_NO_CONTRACT_RUNNING = 1
 };
 
-enum SCVmErrorCode {
-    VM_UNKNOWN = 0,
-    VM_VALIDATION = 1,
-    VM_INSTANTIATION = 2,
-    VM_FUNCTION = 3,
-    VM_TABLE = 4,
-    VM_MEMORY = 5,
-    VM_GLOBAL = 6,
-    VM_VALUE = 7,
-    VM_TRAP_UNREACHABLE = 8,
-    VM_TRAP_MEMORY_ACCESS_OUT_OF_BOUNDS = 9,
-    VM_TRAP_TABLE_ACCESS_OUT_OF_BOUNDS = 10,
-    VM_TRAP_ELEM_UNINITIALIZED = 11,
-    VM_TRAP_DIVISION_BY_ZERO = 12,
-    VM_TRAP_INTEGER_OVERFLOW = 13,
-    VM_TRAP_INVALID_CONVERSION_TO_INT = 14,
-    VM_TRAP_STACK_OVERFLOW = 15,
-    VM_TRAP_UNEXPECTED_SIGNATURE = 16,
-    VM_TRAP_MEM_LIMIT_EXCEEDED = 17,
-    VM_TRAP_CPU_LIMIT_EXCEEDED = 18
+// A signed int256 has a high sign bit and 255 value bits. We break it into a
+// signed high int64 (that carries the sign bit and the high 63 value bits) and
+// three low unsigned `uint64`s that carry the lower bits. This will sort in
+// generated code in the same order the underlying int256 sorts.
+struct Int256Parts {
+    int64 hi_hi;
+    uint64 hi_lo;
+    uint64 lo_hi;
+    uint64 lo_lo;
 };
 
-enum SCUnknownErrorCode
+enum ContractExecutableType
 {
-    UNKNOWN_ERROR_GENERAL = 0,
-    UNKNOWN_ERROR_XDR = 1
+    CONTRACT_EXECUTABLE_WASM = 0,
+    CONTRACT_EXECUTABLE_TOKEN = 1
 };
 
-union SCStatus switch (SCStatusType type)
+union ContractExecutable switch (ContractExecutableType type)
 {
-case SST_OK:
+case CONTRACT_EXECUTABLE_WASM:
+    Hash wasm_hash;
+case CONTRACT_EXECUTABLE_TOKEN:
     void;
 case SST_UNKNOWN_ERROR:
     SCUnknownErrorCode unknownCode;

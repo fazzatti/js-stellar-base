@@ -1,5 +1,3 @@
-import isString from 'lodash/isString';
-
 import xdr from '../xdr';
 import { StrKey } from '../strkey';
 
@@ -58,7 +56,7 @@ export function encodeMuxedAccount(address, id) {
   if (!StrKey.isValidEd25519PublicKey(address)) {
     throw new Error('address should be a Stellar account ID (G...)');
   }
-  if (!isString(id)) {
+  if (typeof id !== 'string') {
     throw new Error('id should be a string representing a number (uint64)');
   }
 
@@ -107,8 +105,8 @@ function _decodeAddressFullyToMuxedAccount(address) {
   // for the Golang implementation of the M... parsing.
   return xdr.MuxedAccount.keyTypeMuxedEd25519(
     new xdr.MuxedAccountMed25519({
-      id: xdr.Uint64.fromXDR(rawBytes.slice(-8)),
-      ed25519: rawBytes.slice(0, -8)
+      id: xdr.Uint64.fromXDR(rawBytes.subarray(-8)),
+      ed25519: rawBytes.subarray(0, -8)
     })
   );
 }

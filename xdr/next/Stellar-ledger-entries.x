@@ -4,6 +4,7 @@
 
 %#include "xdr/Stellar-types.h"
 %#include "xdr/Stellar-contract.h"
+%#include "xdr/Stellar-contract-config-setting.h"
 
 namespace stellar
 {
@@ -492,10 +493,9 @@ struct LiquidityPoolEntry
     body;
 };
 
-struct ContractDataEntry {
-    Hash contractID;
-    SCVal key;
-    SCVal val;
+enum ContractEntryBodyType {
+    DATA_ENTRY = 0,
+    EXPIRATION_EXTENSION = 1
 };
 
 struct ContractCodeEntry {
@@ -616,6 +616,7 @@ case CONFIG_SETTING_CONTRACT_HOST_LOGIC_VERSION:
     uint32 contractHostLogicVersion;
 };
 
+
 struct LedgerEntryExtensionV1
 {
     SponsorshipDescriptor sponsoringID;
@@ -709,8 +710,10 @@ case LIQUIDITY_POOL:
 case CONTRACT_DATA:
     struct
     {
-        Hash contractID;
+        SCAddress contract;
         SCVal key;
+        ContractDataDurability durability;
+        ContractEntryBodyType bodyType;
     } contractData;
 case CONTRACT_CODE:
     struct

@@ -2,27 +2,29 @@ name: npm publish
 on:
   release:
     types: [published]
+  push:
+    branches: [soroban]
 
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
-          node-version: '14.x'
+          node-version: 16
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install Depencencies
-        run: yarn
+        run: yarn install
 
       - name: Test & Build
         run: yarn preversion
 
-      - name: Publish npm package
-        run: yarn publish
+      - name: Publish release npm package
+        run: yarn publish --tag soroban
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -14,7 +14,6 @@ const config = {
   },
   resolve: {
     fallback: {
-      crypto: require.resolve('crypto-browserify'),
       stream: require.resolve('stream-browserify'),
       buffer: require.resolve('buffer')
     },
@@ -27,7 +26,7 @@ const config = {
     path: path.resolve(__dirname, '../dist')
   },
   mode: process.env.NODE_ENV ?? 'development',
-  devtool: process.env.NODE_ENV === 'production' ? false : 'inline-source-map',
+  devtool: process.env.NODE_ENV === 'production' ? false : 'source-map',
   module: {
     rules: [
       {

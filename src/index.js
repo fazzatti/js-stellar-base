@@ -45,4 +45,16 @@ export {
   encodeMuxedAccount
 } from './util/decode_encode_muxed_account';
 
+//
+// Soroban
+//
+
+export { Contract } from './contract';
+export { Address } from './address';
+export * from './numbers';
+export * from './scval';
+export * from './events';
+export * from './sorobandata_builder';
+export * from './auth';
+
 export default module.exports;

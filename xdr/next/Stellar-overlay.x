@@ -27,6 +27,12 @@ struct SendMore
     uint32 numMessages;
 };
 
+struct SendMoreExtended
+{
+    uint32 numMessages;
+    uint32 numBytes;
+};
+
 struct AuthCert
 {
     Curve25519Public pubkey;
@@ -83,7 +89,7 @@ struct PeerAddress
     uint32 numFailures;
 };
 
-// Next ID: 18
+// Next ID: 21
 enum MessageType
 {
     ERROR_MSG = 0,
@@ -194,6 +200,9 @@ struct TopologyResponseBodyV0
 
     uint32 totalInboundPeerCount;
     uint32 totalOutboundPeerCount;
+
+    uint32 maxInboundPeerCount;
+    uint32 maxOutboundPeerCount;
 };
 
 struct TopologyResponseBodyV1
